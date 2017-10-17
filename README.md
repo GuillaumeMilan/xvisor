@@ -1,12 +1,13 @@
 # Fault injection software for ZYBO with Xvisor
 _Authors_:
 
-__Thomas Provent__ : Installation and choices
+__Thomas Provent__: Installation and choices
 
-__Arthur Dumas, Romain Pierson, Guillaume Milan__ : 
+__Arthur Dumas, Romain Pierson, Guillaume Milan__: 
 Fault injection campaign developpment. 
 
 _Supervisor_: 
+
 __Michele Portolan__. 
 
 This project is made to emulate a software running on a ZYBO and 
@@ -61,7 +62,29 @@ It exist a problem installing the software on different system than Debian.
     the executable file `conf`. If you find any other way to fix, 
     feel free to contact me at guillaume.milan@grenoble-inp.org.
 
-# The version of the file is currently 
+# Install your software for QEMU emulation.
+
+__TODO__
+
+This section must be completed. 
+
+# Install your software on the ZYBO. 
+
+__TODO__
+
+This section must be completed. 
+
+# Launch an injection campaign on your software. 
+
+__TODO__ 
+
+This section must be completed. 
+
+# Analyse the result of the injection. 
+
+__TODO__ 
+
+This section must be completed. 
 
 # Forked from Xvisor version 0.2.xx
 
