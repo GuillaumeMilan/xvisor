@@ -62,7 +62,21 @@ It exist a problem installing the software on different system than Debian.
 
 # Install your software for QEMU emulation.
 
-__TODO__
+First you need to lauch the QEMU software with the command: 
+    
+    qemu-system-arm -M vexpress-a9 -m 512M -display none -serial stdio -kernel build/vmm.bin -dtb build/arch/arm/board/generic/dts/vexpress/a9/one_guest_vexpress-a9.dtb -initrd build/disk.img
+
+This command have launched quemu with and Xvisor running on an ARM emulation. 
+
+Then we have to lauch FreeRTOS. This is done by kicking the guest0 and bind the UART on the guest. 
+
+    guest kick guest0
+    vserial bind guest0/uart
+
+Now FreeRTOS is running on our Xvisor machine. 
+To return on the Xvisor interface, press `ESC`+`Q`+`X`. 
+
+__TODO explain how to launch a program under FreeRTOS__
 
 This section must be completed. 
 
