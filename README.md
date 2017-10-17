@@ -1,4 +1,26 @@
-# Xvisor version 0.2.xx
+# Fault injection software for ZYBO with Xvisor
+
+This project is made to emulate a software running on a ZYBO and 
+make a fault injection campaign on it. The objective of the project is to 
+inject bit fault in the RAM/Register/FPGA of the ZYBO in order to test the
+reliability of the software supposed to run on it. 
+This test campaign results are then stored in a file that can be proceed by a 
+statistic analysis. 
+
+# How to use the project
+
+After cloning the project you have to run the script `install.sh` as sudo user. 
+This file will install all the dependencies needed by the project. 
+
+First it will install the tools: 
+* flex 
+* bison 
+* genext2fs
+* telnet
+* arm-eabi-\*
+
+
+# Forked from Xvisor version 0.2.xx
 
 http://xvisor.org
 
