@@ -83,7 +83,7 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine)
 
         taskENTER_CRITICAL();
         {
-                arm_printf("%s: file=%s, line=%d!\n", __func__, pcFile, ulLine);
+                arm_printf("%s: file=%s, line=%lu!\n", __func__, pcFile, ulLine);
                 /* Set ul to a non-zero value using the debugger to
                 step out of this function. */
                 while (ul == 0) {
