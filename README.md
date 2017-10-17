@@ -1,4 +1,13 @@
 # Fault injection software for ZYBO with Xvisor
+_Authors_:
+
+__Thomas Provent__ : Installation and choices
+
+__Arthur Dumas, Romain Pierson, Guillaume Milan__ : 
+Fault injection campaign developpment. 
+
+_Supervisor_: 
+__Michele Portolan__. 
 
 This project is made to emulate a software running on a ZYBO and 
 make a fault injection campaign on it. The objective of the project is to 
@@ -8,6 +17,8 @@ This test campaign results are then stored in a file that can be proceed by a
 statistic analysis. 
 
 # How to use the project
+
+__Install the project (on Linux) with install.sh__
 
 After cloning the project you have to run the script `install.sh` as sudo user. 
 This file will install all the dependencies needed by the project. 
@@ -50,6 +61,7 @@ It exist a problem installing the software on different system than Debian.
     the executable file `conf`. If you find any other way to fix, 
     feel free to contact me at guillaume.milan@grenoble-inp.org.
 
+# The version of the file is currently 
 
 # Forked from Xvisor version 0.2.xx
 
