@@ -6,9 +6,7 @@ __Thomas Provent__: Installation and choices
 __Arthur Dumas, Romain Pierson, Guillaume Milan__: 
 Fault injection campaign developpment. 
 
-_Supervisor_: 
-
-__Michele Portolan__. 
+_Supervisor_: __Michele Portolan__. 
 
 This project is made to emulate a software running on a ZYBO and 
 make a fault injection campaign on it. The objective of the project is to 
