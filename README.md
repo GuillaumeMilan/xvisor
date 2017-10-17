@@ -19,6 +19,36 @@ First it will install the tools:
 * telnet
 * arm-eabi-\*
 
+Then it initialize and update the git submodule. 
+It defines the target architecture as ARM. 
+It installs FreeRTOS on Xvisor, patch it and create an image disk for Xvisor. 
+
+__Known trouble installing the software__
+It exist a problem installing the software on different system than Debian. 
+1. __Arch Linux__ 
+   Trouble using the make command due to gcc version. 
+   (`make ARCH=arm generic-v7-defconfig` and `make all dtbs`). 
+   This can be fixed by updating `gcc` and the libraries. To do that execute 
+   the following commands: 
+       
+       sudo packman -Suy gcc gcc-libs
+
+2. __Ubuntu and trouble with libncurse__ 
+   This problem also may occured when trying to execute the command 
+   `make ARCH=arm generic-v7-defconfig` and `make all dtbs`.
+   One of the unstable solution found was to re/install `build-essential` 
+   package and install `libncurse`. 
+   To do that execute the command: 
+       
+       sudo apt-get remove build-essential
+       sudo apt-get install build-essential
+       sudo apt-get install libncurse5-dev 
+    
+    If the previous solution didn't worked. I suggest you to compile 
+    the folder `$GIT_REPOSITORY/tools/openconf` on an other machine and to copy 
+    the executable file `conf`. If you find any other way to fix, 
+    feel free to contact me at guillaume.milan@grenoble-inp.org.
+
 
 # Forked from Xvisor version 0.2.xx
 
