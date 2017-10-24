@@ -23,6 +23,7 @@
 
 commands-objs-$(CONFIG_CMD_VERSION)+= cmd_version.o
 commands-objs-$(CONFIG_CMD_SLEEP)+= cmd_sleep.o
+commands-objs-y+= cmd_hello_world.o
 commands-objs-$(CONFIG_CMD_ECHO)+= cmd_echo.o
 commands-objs-$(CONFIG_CMD_RESET)+= cmd_reset.o
 commands-objs-$(CONFIG_CMD_SHUTDOWN)+= cmd_shutdown.o
