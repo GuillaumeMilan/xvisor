@@ -53,6 +53,8 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest halt    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest dumpmem <guest_name> <gphys_addr> "
 			  "[mem_sz]\n");
+	vmm_cprintf(cdev, "   guest loadmem <guest_name> <gphys_addr> "
+			  "<value>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
@@ -233,6 +235,43 @@ static int cmd_guest_halt(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
+static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
+			     physical_addr_t gphys_addr, u32 word)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    if(!guest) {
+	vmm_cprintf(cdev,"Failed to find guest\n");
+	return VMM_ENOTAVAIL;
+    }
+    vmm_guest_memory_write(guest, gphys_addr, &word, 4, true);
+    return VMM_OK;
+
+}
+
+static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
+    			    physical_addr_t gphys_addr)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    u32 loaded;
+    u32 buf,mask;
+    /* Setting the mask to change only 1 bit in the memory */
+    int random = 0; /* This value need to be setted to random(0,7) */
+    mask = 1 << random;
+    if(!guest) {
+	vmm_cprintf(cdev,"Failed to find guest\n");
+	return VMM_ENOTAVAIL;
+    }
+    loaded = vmm_guest_memory_read(guest, gphys_addr,
+					       &buf, 4, FALSE);
+    if (loaded != 4) {
+	vmm_cprintf(cdev,"Not able to read the memory!\n");
+	return VMM_EFAIL;
+    }
+    buf = buf ^ mask;
+    vmm_guest_memory_write(guest, gphys_addr, &buf, 4, true);
+    return VMM_OK;
+}
+
 static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 			     physical_addr_t gphys_addr, u32 len)
 {
@@ -346,6 +385,7 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 {
 	int ret = VMM_OK;
 	u32 size;
+	u32 value;
 	physical_addr_t src_addr;
 	if (argc == 2) {
 		if (strcmp(argv[1], "help") == 0) {
@@ -380,6 +420,18 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 			return ret;
 		}
 		return cmd_guest_dumpmem(cdev, argv[2], src_addr, size);
+	} else if (strcmp(argv[1], "loadmem") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_loadmem(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "inject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_inject(cdev, argv[2], src_addr);
 	} else if (strcmp(argv[1], "region") == 0) {
 		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
 		if (VMM_OK != ret) {

@@ -1,7 +1,7 @@
 # Fault injection software for ZYBO with Xvisor
 _Authors_:
 
-__Thomas Provent__: Installation and choices
+__Thomas Provent__: Installation and tools choices
 
 __Arthur Dumas, Romain Pierson, Guillaume Milan__: 
 Fault injection campaign developpment. 
