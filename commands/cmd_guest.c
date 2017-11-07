@@ -55,6 +55,8 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "[mem_sz]\n");
 	vmm_cprintf(cdev, "   guest loadmem <guest_name> <gphys_addr> "
 			  "<value>\n");
+	vmm_cprintf(cdev, "   guest inject  <guest_name> <gphys_addr> "
+			  "<shift>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
@@ -249,14 +251,17 @@ static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
 }
 
 static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
-    			    physical_addr_t gphys_addr)
+    			    physical_addr_t gphys_addr, u32 shift)
 {
     struct vmm_guest *guest = vmm_manager_guest_find(name);
     u32 loaded;
     u32 buf,mask;
-    /* Setting the mask to change only 1 bit in the memory */
-    int random = 0; /* This value need to be setted to random(0,7) */
-    mask = 1 << random;
+    if(shift>7) {
+	vmm_cprintf(cdev,"Shift not valid\n");
+	return VMM_EFAIL;
+    }
+
+    mask = 1 << shift;
     if(!guest) {
 	vmm_cprintf(cdev,"Failed to find guest\n");
 	return VMM_ENOTAVAIL;
@@ -431,7 +436,7 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 		if (VMM_OK != ret) {
 			return ret;
 		}
-		return cmd_guest_inject(cdev, argv[2], src_addr);
+		return cmd_guest_inject(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "region") == 0) {
 		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
 		if (VMM_OK != ret) {
