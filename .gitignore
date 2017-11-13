@@ -13,6 +13,7 @@ gdbinit1
 typescript
 build/
 test_*objs/
+tests/arm32/vexpress-a9/freertos/
 cscope.*
 *~
 tools/openconf/lex.zconf.c
@@ -21,6 +22,7 @@ tools/openconf/mconf
 tools/openconf/zconf.hash.c
 create-flash-image
 flash
+
 #
 # Exceptions
 #
