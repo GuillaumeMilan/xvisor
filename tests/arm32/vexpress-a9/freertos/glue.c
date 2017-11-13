@@ -104,8 +104,9 @@ void arm_init(void)
 
 int arm_main(void)
 {
+	int a= 0x44444444;
         arm_puts("Welcome to FreeRTOS!\n");
-
+	arm_printf("%x", (unsigned int)&a);
         main_blinky();
 
         /* Don't expect to reach here. */
