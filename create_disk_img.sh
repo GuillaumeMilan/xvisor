@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cd $xvisor_src
+#cd $xvisor_src
+echo $(pwd)
 dtc=./build/tools/dtc/bin/dtc
 bindir=./build/disk/images/arm32/vexpress-a9
 system_dir=./build/disk/system
