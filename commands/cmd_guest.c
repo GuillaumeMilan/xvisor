@@ -31,6 +31,7 @@
 #include <vmm_cmdmgr.h>
 #include <vmm_devemu.h>
 #include <libs/stringlib.h>
+#include <cpu_defines.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -50,6 +51,7 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest kick    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest pause   <guest_name>\n");
 	vmm_cprintf(cdev, "   guest resume  <guest_name>\n");
+	vmm_cprintf(cdev, "   guest status  <guest_name>\n");
 	vmm_cprintf(cdev, "   guest halt    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest dumpmem <guest_name> <gphys_addr> "
 			  "[mem_sz]\n");
@@ -197,6 +199,46 @@ static int cmd_guest_pause(struct vmm_chardev *cdev, const char *name)
 	}
 
 	return ret;
+}
+
+static int cmd_guest_status(struct vmm_chardev *cdev, const char *name) 
+{
+    int i,mod;
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+
+    if (!guest) {
+        vmm_cprintf(cdev, "Failed to find guest\n");
+        return VMM_ENOTAVAIL;
+    }
+    vmm_cprintf(cdev, "     ***STATUS OF %s*****\n",name);
+    vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
+
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d\n",vcpu->id,vcpu->subid);
+        vmm_cprintf(cdev, "STACK: \n");
+        vmm_cprintf(cdev, "    START PC : 0x%08x\n",vcpu->start_pc);
+        vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
+        vmm_cprintf(cdev, "    STACK VA : 0x%08x\n",vcpu->stack_sz);
+        vmm_cprintf(cdev, "REGISTER:\n");
+        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n", 
+                vcpu->regs.sp_excp);
+        vmm_cprintf(cdev, "    CPSR : 0x%08x\n", vcpu->regs.cpsr);
+        vmm_cprintf(cdev, "    SP : 0x%08x", vcpu->regs.sp);
+        vmm_cprintf(cdev, "    LR : 0x%08x", vcpu->regs.lr);
+        vmm_cprintf(cdev, "    PC : 0x%08x\n", vcpu->regs.pc);
+        mod = 0;
+        for(i=0;i<CPU_GPR_COUNT;i++) {
+            mod ++;
+            vmm_cprintf(cdev, "    R%02d=0x%08x",i,vcpu->regs.gpr[i]);
+            if (mod==4||mod==8||mod==12)
+                vmm_cprintf(cdev,"\n");
+        }
+        vmm_cprintf(cdev,"\n");
+    }
+    vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
 }
 
 static int cmd_guest_resume(struct vmm_chardev *cdev, const char *name)
@@ -417,6 +459,8 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 		return cmd_guest_pause(cdev, argv[2]);
 	} else if (strcmp(argv[1], "resume") == 0) {
 		return cmd_guest_resume(cdev, argv[2]);
+	} else if (strcmp(argv[1], "status") == 0) {
+		return cmd_guest_status(cdev, argv[2]);
 	} else if (strcmp(argv[1], "halt") == 0) {
 		return cmd_guest_halt(cdev, argv[2]);
 	} else if (strcmp(argv[1], "dumpmem") == 0) {
