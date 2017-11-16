@@ -107,7 +107,7 @@ int arm_main(void)
 {
         arm_puts("Welcome to FreeRTOS!\n");
         while (1) {
-        change_mem();
+            increment_loop();
         }
         /*main_blinky();*/
         /* Don't expect to reach here. */
