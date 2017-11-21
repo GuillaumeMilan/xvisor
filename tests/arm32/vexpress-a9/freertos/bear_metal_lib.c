@@ -69,3 +69,19 @@ int increment_loop(void) {
         }
     }
 }
+
+int set_r9() {
+    char command[255];
+    register int value asm("r9");
+    arm_printf("r9 = %d\n",value);
+    __asm__("mov %r9, #4");
+    arm_printf("r9 = %d\n",value);
+    while(1) {
+        arm_gets(command,255,'\n');
+        if (command[0]=='0')
+            return 0;
+        arm_printf("r9 = %d\n",value);
+    }
+    return 0;
+
+}

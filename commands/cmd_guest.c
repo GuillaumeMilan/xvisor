@@ -32,6 +32,7 @@
 #include <vmm_devemu.h>
 #include <libs/stringlib.h>
 #include <cpu_defines.h>
+#include <cpu_vcpu_helper.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -59,6 +60,10 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "<value>\n");
 	vmm_cprintf(cdev, "   guest inject  <guest_name> <gphys_addr> "
 			  "<shift>\n");
+	vmm_cprintf(cdev, "   guest reginject  <guest_name> <gphys_addr> "
+			  "<shift>\n");
+	vmm_cprintf(cdev, "   guest reg     <guest_name> <reg_num> "
+			  "<value>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
@@ -216,7 +221,7 @@ static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
     vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
 
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
-        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d\n",vcpu->id,vcpu->subid);
+        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d,ADDRESS:0x%08x\n",vcpu->id,vcpu->subid,(unsigned int)vcpu);
         vmm_cprintf(cdev, "STACK: \n");
         vmm_cprintf(cdev, "    START PC : 0x%08x\n",vcpu->start_pc);
         vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
@@ -290,6 +295,64 @@ static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
     vmm_guest_memory_write(guest, gphys_addr, &word, 4, true);
     return VMM_OK;
 
+}
+
+static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
+    			    physical_addr_t reg, u32 value)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+
+    if (!guest) {
+        return VMM_ENOTAVAIL;
+    }
+    vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
+
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
+    }
+    vmm_write_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
+}
+
+/** This function realize a bit swap on the register indicated by the 
+ *    id = shitf/32
+ **/
+static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
+    			    physical_addr_t reg, u32 shift)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+    u32 mask = 1<<(shift%32);
+    u32 value;
+    u32 cpu_id = shift/32;
+    
+    if (!guest) {
+        return VMM_ENOTAVAIL;
+    }
+
+    vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        if (vcpu->id==cpu_id) {
+            value = vcpu->regs.gpr[(u32)reg];
+            break;
+        }
+    }
+    vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+   
+    value = value ^ mask;
+
+    vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        if(vcpu->id==cpu_id) {
+            cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
+            break;
+        }
+    }
+    vmm_write_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
 }
 
 static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
@@ -481,6 +544,18 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 			return ret;
 		}
 		return cmd_guest_inject(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "reginject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_reginject(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "reg") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_reg(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "region") == 0) {
 		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
 		if (VMM_OK != ret) {
