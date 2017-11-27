@@ -296,7 +296,12 @@ static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
     return VMM_OK;
 
 }
-
+/** REGISTER NUMBER TABLE:
+ *  0 - 12 : R0-R12
+ *  13 : SP
+ *  14 : LR
+ *  15 : PC
+ **/
 static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     			    physical_addr_t reg, u32 value)
 {
