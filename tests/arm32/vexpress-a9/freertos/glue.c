@@ -23,6 +23,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "bear_metal_lib.h"
 
 #include <arm_io.h>
 #include <arm_irq.h>
@@ -104,11 +105,11 @@ void arm_init(void)
 
 int arm_main(void)
 {
-	int a= 0x44444444;
         arm_puts("Welcome to FreeRTOS!\n");
-	arm_printf("%x", (unsigned int)&a);
-        main_blinky();
-
+        while(1) {
+            set_r9();
+        }
+        /*main_blinky();*/
         /* Don't expect to reach here. */
         return 0;
 }
