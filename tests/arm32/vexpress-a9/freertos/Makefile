@@ -63,7 +63,7 @@ COMMON_SRCS = arm_string.c arm_math.c arm_stdio.c arm_irq.c pic/gic.c   \
 
 # FreeRTOS specific glue and application source (relative to $srcdir)
 OTHER_SRCS = port/port.c port/portASM.S ../basic/arm_board.c	\
-             arm_entry_v7.S glue.c main.c
+             arm_entry_v7.S bear_metal_lib.c glue.c main.c 
 
 CC	= $(CROSS_COMPILE)gcc
 CPP	= $(CROSS_COMPILE)cpp

@@ -23,8 +23,8 @@ export PATH="$PATH":$xvisor_src/../tools/arm-eabi-4.6/bin
 export CROSS_COMPILE=arm-eabi-
 
 arm-eabi-gcc --version
-tmp=echo $?
-if [ tmp -ne 0 ]; then
+tmp=$?
+if [[ tmp -ne 0 ]]; then
     echo "Error installing arm-eabi-gcc"
     exit 1
 fi

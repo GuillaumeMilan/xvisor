@@ -30,7 +30,12 @@
 #include <vmm_modules.h>
 #include <vmm_cmdmgr.h>
 #include <vmm_devemu.h>
+#include <vmm_delay.h>
+#include <arch_delay.h>
+#include <arch_cpu.h>
 #include <libs/stringlib.h>
+#include <cpu_defines.h>
+#include <cpu_vcpu_helper.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -50,6 +55,7 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest kick    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest pause   <guest_name>\n");
 	vmm_cprintf(cdev, "   guest resume  <guest_name>\n");
+	vmm_cprintf(cdev, "   guest status  <guest_name>\n");
 	vmm_cprintf(cdev, "   guest halt    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest dumpmem <guest_name> <gphys_addr> "
 			  "[mem_sz]\n");
@@ -57,6 +63,12 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "<value>\n");
 	vmm_cprintf(cdev, "   guest inject  <guest_name> <gphys_addr> "
 			  "<shift>\n");
+	vmm_cprintf(cdev, "   guest reginject  <guest_name> <gphys_addr> "
+			  "<shift>\n");
+	vmm_cprintf(cdev, "   guest reg     <guest_name> <reg_num> "
+			  "<value>\n");
+	vmm_cprintf(cdev, "   guest cycle_inject  <guest_name> <gphys_addr> "
+			  "<shift> <cycle>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
@@ -199,6 +211,46 @@ static int cmd_guest_pause(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
+static int cmd_guest_status(struct vmm_chardev *cdev, const char *name) 
+{
+    int i,mod;
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+
+    if (!guest) {
+        vmm_cprintf(cdev, "Failed to find guest\n");
+        return VMM_ENOTAVAIL;
+    }
+    vmm_cprintf(cdev, "     ***STATUS OF %s*****\n",name);
+    vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
+
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d,ADDRESS:0x%08x\n",vcpu->id,vcpu->subid,(unsigned int)vcpu);
+        vmm_cprintf(cdev, "STACK: \n");
+        vmm_cprintf(cdev, "    START PC : 0x%08x\n",vcpu->start_pc);
+        vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
+        vmm_cprintf(cdev, "    STACK VA : 0x%08x\n",vcpu->stack_sz);
+        vmm_cprintf(cdev, "REGISTER:\n");
+        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n", 
+                vcpu->regs.sp_excp);
+        vmm_cprintf(cdev, "    CPSR : 0x%08x\n", vcpu->regs.cpsr);
+        vmm_cprintf(cdev, "    SP : 0x%08x", vcpu->regs.sp);
+        vmm_cprintf(cdev, "    LR : 0x%08x", vcpu->regs.lr);
+        vmm_cprintf(cdev, "    PC : 0x%08x\n", vcpu->regs.pc);
+        mod = 0;
+        for(i=0;i<CPU_GPR_COUNT;i++) {
+            mod ++;
+            vmm_cprintf(cdev, "    R%02d=0x%08x",i,vcpu->regs.gpr[i]);
+            if (mod==4||mod==8||mod==12)
+                vmm_cprintf(cdev,"\n");
+        }
+        vmm_cprintf(cdev,"\n");
+    }
+    vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
+}
+
 static int cmd_guest_resume(struct vmm_chardev *cdev, const char *name)
 {
 	int ret;
@@ -248,6 +300,69 @@ static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
     vmm_guest_memory_write(guest, gphys_addr, &word, 4, true);
     return VMM_OK;
 
+}
+/** REGISTER NUMBER TABLE:
+ *  0 - 12 : R0-R12
+ *  13 : SP
+ *  14 : LR
+ *  15 : PC
+ **/
+static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
+    			    physical_addr_t reg, u32 value)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+
+    if (!guest) {
+        return VMM_ENOTAVAIL;
+    }
+    vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
+
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
+    }
+    vmm_write_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
+}
+
+/** This function realize a bit swap on the register indicated by the 
+ *    id = shitf/32
+ **/
+static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
+    			    physical_addr_t reg, u32 shift)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    struct vmm_vcpu *vcpu = NULL;
+    irq_flags_t flags;
+    u32 mask = 1<<(shift%32);
+    u32 value;
+    u32 cpu_id = shift/32;
+    
+    if (!guest) {
+        return VMM_ENOTAVAIL;
+    }
+
+    vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        if (vcpu->id==cpu_id) {
+            value = vcpu->regs.gpr[(u32)reg];
+            break;
+        }
+    }
+    vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+   
+    value = value ^ mask;
+
+    vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
+    list_for_each_entry(vcpu, &guest->vcpu_list, head) {
+        if(vcpu->id==cpu_id) {
+            cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
+            break;
+        }
+    }
+    vmm_write_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
+    return VMM_OK;
 }
 
 static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
@@ -316,6 +431,41 @@ static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 	return VMM_EFAIL;
 }
 
+static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
+                    physical_addr_t gphys_addr, u32 shift, u64 cycle)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    
+    if (!guest) {
+        vmm_cprintf(cdev, "Failed to find guest %s\n", name);
+        return VMM_ENOTAVAIL;
+    }
+
+    struct vmm_vcpu *vcpu = vmm_manager_guest_vcpu(guest, 0);
+
+    if (!vcpu) {
+        vmm_cprintf(cdev, "Failed to find vcpu0 of %s\n", name);
+        return VMM_ENOTAVAIL;
+    }
+
+    u64 time = 0;
+    u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
+
+    cmd_guest_kick(cdev, name);
+    
+    while (time < cycle) { 
+        arch_delay_loop(1);
+        time += estimated_cycle_by_loop;  // 2 cycles estimated by arch_delay_loop on arm32
+    }
+
+    cmd_guest_pause(cdev, name);
+    vmm_cprintf(cdev, "Injecting fault at estimated cycle %llu at address 0x%llx with shift of %u bits.\n", time, (u64) gphys_addr, shift);
+    cmd_guest_inject(cdev, name, gphys_addr, shift);
+    cmd_guest_resume(cdev, name);
+
+    return VMM_OK;
+}
+
 static int cmd_guest_region(struct vmm_chardev *cdev, const char *name,
 			    physical_addr_t gphys_addr)
 {
@@ -369,7 +519,7 @@ static int cmd_guest_region(struct vmm_chardev *cdev, const char *name,
 }
 
 static int cmd_guest_param(struct vmm_chardev *cdev, int argc, char **argv,
-			   physical_addr_t *src_addr, u32 *size)
+			   physical_addr_t *src_addr, u32 *size, u32 *time)
 {
 	if (argc < 4) {
 		vmm_cprintf(cdev, "Error: Insufficient argument for "
@@ -383,6 +533,11 @@ static int cmd_guest_param(struct vmm_chardev *cdev, int argc, char **argv,
 	} else {
 		*size = 64;
 	}
+    if (argc > 5) {
+		*time = (physical_size_t)strtoull(argv[5], NULL, 0);
+	} else {
+		*time = 0;
+	}
 	return VMM_OK;
 }
 
@@ -391,6 +546,7 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 	int ret = VMM_OK;
 	u32 size;
 	u32 value;
+    u32 time;
 	physical_addr_t src_addr;
 	if (argc == 2) {
 		if (strcmp(argv[1], "help") == 0) {
@@ -417,28 +573,48 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 		return cmd_guest_pause(cdev, argv[2]);
 	} else if (strcmp(argv[1], "resume") == 0) {
 		return cmd_guest_resume(cdev, argv[2]);
+	} else if (strcmp(argv[1], "status") == 0) {
+		return cmd_guest_status(cdev, argv[2]);
 	} else if (strcmp(argv[1], "halt") == 0) {
 		return cmd_guest_halt(cdev, argv[2]);
 	} else if (strcmp(argv[1], "dumpmem") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_dumpmem(cdev, argv[2], src_addr, size);
 	} else if (strcmp(argv[1], "loadmem") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_loadmem(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "cycle_inject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_cycle_inject(cdev, argv[2], src_addr, value, time);
 	} else if (strcmp(argv[1], "inject") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_inject(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "reginject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_reginject(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "reg") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_reg(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "region") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
