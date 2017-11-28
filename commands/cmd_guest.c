@@ -67,8 +67,10 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "<shift>\n");
 	vmm_cprintf(cdev, "   guest reg     <guest_name> <reg_num> "
 			  "<value>\n");
-	vmm_cprintf(cdev, "   guest cycle_inject  <guest_name> <gphys_addr> "
-			  "<shift> <cycle>\n");
+	vmm_cprintf(cdev, "   guest cycle_inject  <guest_name> "
+			  "<gphys_addr> <shift> <cycle>\n");
+	vmm_cprintf(cdev, "   guest cycle_reginject  <guest_name> "
+			  "<gphys_addr> <shift> <cycle>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
@@ -336,7 +338,7 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     struct vmm_vcpu *vcpu = NULL;
     irq_flags_t flags;
     u32 mask = 1<<(shift%32);
-    u32 value;
+    u32 value = 0;
     u32 cpu_id = shift/32;
     
     if (!guest) {
@@ -435,34 +437,53 @@ static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
                     physical_addr_t gphys_addr, u32 shift, u64 cycle)
 {
     struct vmm_guest *guest = vmm_manager_guest_find(name);
-    
     if (!guest) {
         vmm_cprintf(cdev, "Failed to find guest %s\n", name);
         return VMM_ENOTAVAIL;
     }
-
     struct vmm_vcpu *vcpu = vmm_manager_guest_vcpu(guest, 0);
-
     if (!vcpu) {
         vmm_cprintf(cdev, "Failed to find vcpu0 of %s\n", name);
         return VMM_ENOTAVAIL;
     }
-
     u64 time = 0;
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
-
     cmd_guest_kick(cdev, name);
-    
     while (time < cycle) { 
+        time += estimated_cycle_by_loop;
         arch_delay_loop(1);
-        time += estimated_cycle_by_loop;  // 2 cycles estimated by arch_delay_loop on arm32
     }
-
     cmd_guest_pause(cdev, name);
-    vmm_cprintf(cdev, "Injecting fault at estimated cycle %llu at address 0x%llx with shift of %u bits.\n", time, (u64) gphys_addr, shift);
+    vmm_cprintf(cdev, "%s: Injected fault (cycle %llu, address 0x%llx, shift %u)\n", name, time, (u64) gphys_addr, shift);
     cmd_guest_inject(cdev, name, gphys_addr, shift);
     cmd_guest_resume(cdev, name);
+    return VMM_OK;
+}
 
+static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name,
+                    physical_addr_t gphys_addr, u32 shift, u64 cycle)
+{
+    struct vmm_guest *guest = vmm_manager_guest_find(name);
+    if (!guest) {
+        vmm_cprintf(cdev, "Failed to find guest %s\n", name);
+        return VMM_ENOTAVAIL;
+    }
+    struct vmm_vcpu *vcpu = vmm_manager_guest_vcpu(guest, 0);
+    if (!vcpu) {
+        vmm_cprintf(cdev, "Failed to find vcpu0 of %s\n", name);
+        return VMM_ENOTAVAIL;
+    }
+    u64 time = 0;
+    u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
+    cmd_guest_kick(cdev, name);
+    while (time < cycle) { 
+        time += estimated_cycle_by_loop;
+        arch_delay_loop(1);
+    }
+    cmd_guest_pause(cdev, name);
+    vmm_cprintf(cdev, "%s: Injected fault (cycle %llu, reg %llu, shift %u)\n", name, time, (u64) gphys_addr, shift);
+    cmd_guest_reginject(cdev, name, gphys_addr, shift);
+    cmd_guest_resume(cdev, name);
     return VMM_OK;
 }
 
@@ -595,6 +616,12 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 			return ret;
 		}
 		return cmd_guest_cycle_inject(cdev, argv[2], src_addr, value, time);
+	} else if (strcmp(argv[1], "cycle_reginject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_cycle_reginject(cdev, argv[2], src_addr, value, time);
 	} else if (strcmp(argv[1], "inject") == 0) {
 		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
@@ -602,13 +629,13 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 		}
 		return cmd_guest_inject(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "reginject") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_reginject(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "reg") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
