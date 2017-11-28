@@ -32,6 +32,9 @@ builddir = $(basedir)/build
 srcdir          = $(basedir)/tests/arm32/vexpress-a9/freertos
 common_srcdir   = $(srcdir)/../../common/basic
 freertos_srcdir = $(srcdir)/FreeRTOS/Source
+arm_none_eabi_srcdir = /usr/lib/gcc/arm-none-eabi/6.3.1/include-fixed/
+gcc_lib_srcdir = /usr/lib/gcc/avr/7.2.0/include-fixed/
+lib_xvisor = /home/bonhomme/xvisor-tree/xvisor/libs/include/libs/
 
 objdir          = $(patsubst $(basedir)/%,$(builddir)/%, $(srcdir))
 
@@ -79,7 +82,7 @@ CPATCH32   = $(builddir)/tools/cpatch/cpatch32
 LINK_SCRIPT = $(common_srcdir)/firmware.ld
 
 CPPFLAGS = -I$(srcdir)/../basic -I$(common_srcdir)			\
-           -I$(freertos_srcdir)/include -I$(srcdir) -I$(srcdir)/port	\
+           -I$(freertos_srcdir)/include -I$(srcdir) -I$(srcdir)/port -I$(arm_none_eabi_srcdir) -I$(gcc_lib_srcdir) -I$(lib_xvisor)	\
            -DTEXT_START=$(BOARD_TEXT_START)				\
            -DUSR_STACK_SIZE=$(BOARD_USR_STACK_SIZE)
 
@@ -225,4 +228,3 @@ endef
 .SUFFIXES:
 
 # Taf!
-
