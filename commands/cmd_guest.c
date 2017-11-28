@@ -55,7 +55,7 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest kick    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest pause   <guest_name>\n");
 	vmm_cprintf(cdev, "   guest resume  <guest_name>\n");
-	vmm_cprintf(cdev, "   guest status  <guest_name>\n");
+	vmm_cprintf(cdev, "   guest statu   <guest_name>\n");
 	vmm_cprintf(cdev, "   guest halt    <guest_name>\n");
 	vmm_cprintf(cdev, "   guest dumpmem <guest_name> <gphys_addr> "
 			  "[mem_sz]\n");
@@ -63,13 +63,13 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "<value>\n");
 	vmm_cprintf(cdev, "   guest inject  <guest_name> <gphys_addr> "
 			  "<shift>\n");
-	vmm_cprintf(cdev, "   guest reginject  <guest_name> <gphys_addr> "
+	vmm_cprintf(cdev, "   guest reginject <guest_name> <gphys_addr> "
 			  "<shift>\n");
 	vmm_cprintf(cdev, "   guest reg     <guest_name> <reg_num> "
 			  "<value>\n");
-	vmm_cprintf(cdev, "   guest cycle_inject  <guest_name> "
+	vmm_cprintf(cdev, "   guest cycle_inject <guest_name> "
 			  "<gphys_addr> <shift> <cycle>\n");
-	vmm_cprintf(cdev, "   guest cycle_reginject  <guest_name> "
+	vmm_cprintf(cdev, "   guest cycle_reginject <guest_name> "
 			  "<gphys_addr> <shift> <cycle>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
 	vmm_cprintf(cdev, "Note:\n");
@@ -436,16 +436,6 @@ static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
                     physical_addr_t gphys_addr, u32 shift, u64 cycle)
 {
-    struct vmm_guest *guest = vmm_manager_guest_find(name);
-    if (!guest) {
-        vmm_cprintf(cdev, "Failed to find guest %s\n", name);
-        return VMM_ENOTAVAIL;
-    }
-    struct vmm_vcpu *vcpu = vmm_manager_guest_vcpu(guest, 0);
-    if (!vcpu) {
-        vmm_cprintf(cdev, "Failed to find vcpu0 of %s\n", name);
-        return VMM_ENOTAVAIL;
-    }
     u64 time = 0;
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
     cmd_guest_kick(cdev, name);
@@ -463,16 +453,6 @@ static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
 static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name,
                     physical_addr_t gphys_addr, u32 shift, u64 cycle)
 {
-    struct vmm_guest *guest = vmm_manager_guest_find(name);
-    if (!guest) {
-        vmm_cprintf(cdev, "Failed to find guest %s\n", name);
-        return VMM_ENOTAVAIL;
-    }
-    struct vmm_vcpu *vcpu = vmm_manager_guest_vcpu(guest, 0);
-    if (!vcpu) {
-        vmm_cprintf(cdev, "Failed to find vcpu0 of %s\n", name);
-        return VMM_ENOTAVAIL;
-    }
     u64 time = 0;
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
     cmd_guest_kick(cdev, name);
