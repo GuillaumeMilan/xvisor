@@ -6,6 +6,45 @@ __Thomas Provent__: Installation and tools choices
 __Arthur Dumas, Romain Pierson, Guillaume Milan__: 
 Fault injection campaign developpment. 
 
+
+### Create a boot for Xvisor on Zynq 
+
+__Reference__: 
+- [Create a Boot Image on a ZYBO](http://www.wiki.xilinx.com/Getting+Started).
+- [\[FR\] Boot Xvisor on a Rpi3](http://www.linuxembedded.fr/2017/03/intro_xvisor/)
+
+The objective of this section is to give a way to build and boot Xvisor with a
+guest on an ARM cpu. 
+
+#### Tools 
+First we need the following tool:
+- [U-Boot](https://www.denx.de/wiki/U-Boot): git://git.denx.de/u-boot-imx.git
+
+#### Create a bootable SD card
+To create a bootable SD card, it is recommended to follow the step from 
+[Create a Boot Image on a ZYBO](http://www.wiki.xilinx.com/Getting+Started).
+
+You need to part your SD card in 2 part. The first part (`/boot`) will contain:
+- `BOOT.bin`: The file on which the ZYBO will boot. 
+- `device_tree.dtb`: at `build/arch/arm/board/generic/dts/vexpress/a9/one_guest_vexpress-a9.dtb`
+The second part will contain the files needed for Xvisor and his guest (`/data`)
+
+__BOOT.bin__
+
+1. __Create `u-boot.bin`__. To build `u-boot.bin` you need to clone the 
+repository at the address: `git://git.denx.de/u-boot-imx.git`. Then build your 
+u-boot on the correct architecture. (list available in the folder `configs`). 
+
+    make <configs_file>
+    make all
+
+2. Build Xvisor for the Zynq. And then remap the files to the correct address.
+    ./u-boot/tools/mkimage -A arm64 -O linux -T kernel -C none -a 0x00080000 -e 0x00080000 -n Xvisor -d $xvisor/build/vmm.bin build/uvmm.bin
+    ./u-boot/tools/mkimage -A arm64 -O linux -T ramdisk -a 0x00000000 -n "Xvisor Ramdisk" -d $xvisor/build/disk.img build/udisk.img
+
+3. Open Vivado and build `BOOT.bin` as described on [Create a Boot Image on a ZYBO](http://www.wiki.xilinx.com/Getting+Started).
+
+
 _Supervisor_: __Michele Portolan__. 
 
 This project is made to emulate a software running on a ZYBO and 
