@@ -6,12 +6,12 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2, or (at your option)
 # any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
@@ -23,6 +23,7 @@
 
 commands-objs-$(CONFIG_CMD_VERSION)+= cmd_version.o
 commands-objs-$(CONFIG_CMD_SLEEP)+= cmd_sleep.o
+commands-objs-y+= cmd_rdm.o
 commands-objs-y+= cmd_hello_world.o
 commands-objs-$(CONFIG_CMD_ECHO)+= cmd_echo.o
 commands-objs-$(CONFIG_CMD_RESET)+= cmd_reset.o
