@@ -6,12 +6,12 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
  * any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
@@ -36,6 +36,7 @@
 #include <libs/stringlib.h>
 #include <cpu_defines.h>
 #include <cpu_vcpu_helper.h>
+#include <vmm_timer.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -72,6 +73,9 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest cycle_reginject <guest_name> "
 			  "<gphys_addr> <shift> <cycle>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
+	vmm_cprintf(cdev, "   guest reginject <guest_name> <gphys_addr_min>"
+			  "<gphys_addr_max> <time_max> <nb_inject>\n");
+			  //name, u32 addr_min, u32 addr_max, u64 cycle_max, u32 nb_inject
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
 			  "device tree node\n");
@@ -213,7 +217,7 @@ static int cmd_guest_pause(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
-static int cmd_guest_status(struct vmm_chardev *cdev, const char *name) 
+static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
 {
     int i,mod;
     struct vmm_guest *guest = vmm_manager_guest_find(name);
@@ -234,7 +238,7 @@ static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
         vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
         vmm_cprintf(cdev, "    STACK VA : 0x%08x\n",vcpu->stack_sz);
         vmm_cprintf(cdev, "REGISTER:\n");
-        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n", 
+        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n",
                 vcpu->regs.sp_excp);
         vmm_cprintf(cdev, "    CPSR : 0x%08x\n", vcpu->regs.cpsr);
         vmm_cprintf(cdev, "    SP : 0x%08x", vcpu->regs.sp);
@@ -328,7 +332,7 @@ static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     return VMM_OK;
 }
 
-/** This function realize a bit swap on the register indicated by the 
+/** This function realize a bit swap on the register indicated by the
  *    id = shitf/32
  **/
 static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
@@ -340,7 +344,7 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     u32 mask = 1<<(shift%32);
     u32 value = 0;
     u32 cpu_id = shift/32;
-    
+
     if (!guest) {
         return VMM_ENOTAVAIL;
     }
@@ -353,7 +357,7 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
         }
     }
     vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
-   
+
     value = value ^ mask;
 
     vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
@@ -396,7 +400,7 @@ static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
 
 static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 			     physical_addr_t gphys_addr, u32 len)
-{
+{ //FINDME
 #define BYTES_PER_LINE 16
 	u8 buf[BYTES_PER_LINE];
 	u32 total_loaded = 0, loaded = 0, *mem;
@@ -439,7 +443,7 @@ static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
     u64 time = 0;
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
     cmd_guest_kick(cdev, name);
-    while (time < cycle) { 
+    while (time < cycle) {
         time += estimated_cycle_by_loop;
         arch_delay_loop(1);
     }
@@ -456,7 +460,7 @@ static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name
     u64 time = 0;
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
     cmd_guest_kick(cdev, name);
-    while (time < cycle) { 
+    while (time < cycle) {
         time += estimated_cycle_by_loop;
         arch_delay_loop(1);
     }
@@ -465,6 +469,94 @@ static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name
     cmd_guest_reginject(cdev, name, gphys_addr, shift);
     cmd_guest_resume(cdev, name);
     return VMM_OK;
+}
+
+static u32 pseudo_rand()
+{
+    /* Reentrant random function from POSIX.1c.
+       Copyright (C) 1996, 1999, 2009 Free Software Foundation, Inc.
+       This file is part of the GNU C Library.
+       Contributed by Ulrich Drepper <drepper@cygnus.com>, 1996.
+    */
+   // Hazardous convertion from u64 to u32
+	u32 rdm = 0;
+	if (vmm_timer_started()){
+		rdm = vmm_timer_timestamp();
+	}
+
+    u32 next = rdm;
+    u32 result;
+
+    next *= 1103515245;
+    next += 12345;
+    result = (unsigned int) (next / 65536) % 2048;
+
+    next *= 1103515245;
+    next += 12345;
+    result <<= 10;
+    result ^= (unsigned int) (next / 65536) % 1024;
+
+    next *= 1103515245;
+    next += 12345;
+    result <<= 10;
+    result ^= (unsigned int) (next / 65536) % 1024;
+
+	return result;
+}
+
+// static u32 mod(u32 a, u32 b){
+// 	if (a<0 || b<0){
+// 		return 0;
+// 	}
+// 	while (a >= b){
+// 		a -= b;
+// 	}
+// 	return a;
+// }
+static u32 mod(u32 a, u32 b){
+	return (a-(b*__aeabi_uidivmod(a,b)));
+}
+
+static void wait(u64 nb_cycle){
+	u64 cycles = nb_cycle;
+    u64 elapsed = 0;
+    u64 estimated_cycles = arch_delay_loop_cycles(1);
+
+    while (elapsed < cycles) {
+        elapsed += estimated_cycles;
+        arch_delay_loop(1);
+    }
+}
+
+static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
+                    u32 addr_min, u32 addr_max, u64 cycle_max, u32 nb_inject)
+{
+	// We do it nb_inject times
+	int i = 0;
+	while (i< nb_inject){
+		u32 rdm = pseudo_rand(); // 32 bits random
+		// random between addr_min et addr_max
+		physical_addr_t gphys_addr_inj = (mod(rdm,addr_max - addr_min)) + addr_min;
+		u32 shift = pseudo_rand() % 8; // the offset is the number of the bit in the byte (so < 8)
+		u64 cycle = (u64)pseudo_rand() << 32;
+		cycle += pseudo_rand();// we have a random on 64 bits
+		cycle = mod(cycle, cycle_max);// It is now under cycle_max as requested
+
+		// u32 test1 = 52;
+		// test1 = test1 % 7;
+
+		// vmm_cprintf(cdev,"test1: %u\n", test1);
+		// vmm_cprintf(cdev,"cycle: %llu\n", cycle);
+		// vmm_cprintf(cdev,"shift: %u\n", shift);
+		// vmm_cprintf(cdev,"address: %u\n", gphys_addr_inj);
+
+		cmd_guest_cycle_inject(cdev, name, gphys_addr_inj, shift, cycle);
+		// After the inject only 'cycle' number of cycles have been executed
+		wait(cycle_max - cycle);
+		cmd_guest_reset(cdev, name);
+		i++;
+	}
+	return VMM_OK;
 }
 
 static int cmd_guest_region(struct vmm_chardev *cdev, const char *name,
@@ -608,6 +700,15 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 			return ret;
 		}
 		return cmd_guest_inject(cdev, argv[2], src_addr, value);
+		//cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
+		//						physical_addr_t gphys_addr, u32 shift, u64 cycle)
+	} else if (strcmp(argv[1], "inject_camp") == 0){
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		u32 nb_inject = (physical_size_t)strtoull(argv[6], NULL, 0);
+		return cmd_guest_inject_camp(cdev, argv[2], src_addr, value, time, nb_inject); //FIXME
 	} else if (strcmp(argv[1], "reginject") == 0) {
 		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {

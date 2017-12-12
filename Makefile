@@ -130,26 +130,27 @@ cppflags+=$(board-cppflags)
 cppflags+=$(libs-cppflags-y)
 cc=$(CROSS_COMPILE)gcc
 cflags=-g -Wall -nostdlib --sysroot=$(drivers_dir)/include -fno-builtin -D__VMM__
-cflags+=$(board-cflags) 
-cflags+=$(cpu-cflags) 
-cflags+=$(libs-cflags-y) 
+cflags+=$(board-cflags)
+cflags+=$(cpu-cflags)
+cflags+=$(libs-cflags-y)
 cflags+=$(cppflags)
 ifdef CONFIG_PROFILE
 cflags+=-finstrument-functions
 endif
 as=$(CROSS_COMPILE)gcc
-asflags=-g -Wall -nostdlib -D__ASSEMBLY__ 
-asflags+=$(board-asflags) 
-asflags+=$(cpu-asflags) 
-asflags+=$(libs-asflags-y) 
+asflags=-g -Wall -nostdlib -D__ASSEMBLY__
+asflags+=$(board-asflags)
+asflags+=$(cpu-asflags)
+asflags+=$(libs-asflags-y)
 asflags+=$(cppflags)
 ar=$(CROSS_COMPILE)ar
 arflags=rcs
 ld=$(CROSS_COMPILE)gcc
 ldflags=-g -Wall -nostdlib -Wl,--build-id=none
-ldflags+=$(board-ldflags) 
-ldflags+=$(cpu-ldflags) 
-ldflags+=$(libs-ldflags-y) 
+ldflags+=$(board-ldflags)
+ldflags+=$(cpu-ldflags)
+ldflags+=$(libs-ldflags-y)
+ldflags+=libgcc.a 
 merge=$(CROSS_COMPILE)ld
 mergeflags=-r
 data=$(CROSS_COMPILE)ld
@@ -229,13 +230,13 @@ emulators-object-mks=$(shell if [ -d $(emulators_dir) ]; then find $(emulators_d
 all:
 
 # Include all object.mk files
-include $(cpu-object-mks) 
-include $(cpu-common-object-mks) 
-include $(board-object-mks) 
-include $(board-common-object-mks) 
-include $(core-object-mks) 
-include $(libs-object-mks) 
-include $(commands-object-mks) 
+include $(cpu-object-mks)
+include $(cpu-common-object-mks)
+include $(board-object-mks)
+include $(board-common-object-mks)
+include $(core-object-mks)
+include $(libs-object-mks)
+include $(commands-object-mks)
 include $(daemons-object-mks)
 include $(drivers-object-mks)
 include $(emulators-object-mks)
@@ -449,4 +450,3 @@ savedefconfig:
 	$(V)$(MAKE) -C tools/openconf defconfig
 	./tools/openconf/conf -D $(src_dir)/arch/$(ARCH)/configs/$@ $(OPENCONF_INPUT)
 	./tools/openconf/conf -s $(OPENCONF_INPUT)
-
