@@ -23,7 +23,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "bear_metal_lib.h"
+#include "filter.h"
 
 #include <arm_io.h>
 #include <arm_irq.h>
@@ -107,7 +107,7 @@ int arm_main(void)
 {
         arm_puts("Welcome to FreeRTOS!\n");
         while(1) {
-            set_r9();
+            apply_filter();
         }
         /*main_blinky();*/
         /* Don't expect to reach here. */
