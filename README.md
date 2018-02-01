@@ -179,12 +179,9 @@ __guest inject__ inject a bit flip to a guest memory address according to the sh
 __guest reg__ load a value in the register of both processor of the guest.
 
 __guest reginject__ inject a bit flip to a guest register according to the shift value. `shift(5..0)` define the bit flipped during the operation. And `shift(6)` define in which cpu, the register will be modified. 
-# Analyse the result of the injection. 
 
-__TODO__ 
-
-This section must be completed. 
-
+- - - - - - - - - - - -
+ 
 # Forked from Xvisor version 0.2.xx
 
 http://xvisor.org

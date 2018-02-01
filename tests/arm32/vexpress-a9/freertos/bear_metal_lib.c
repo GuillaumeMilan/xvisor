@@ -85,3 +85,17 @@ int set_r9() {
     return 0;
 
 }
+
+int set_mem() {
+char command[255];
+    int value = 4;
+    arm_printf("at 0x%08x : %d\n", (u32) &value, value); 
+    while (1) {
+        arm_gets(command, 255, '\n');
+        /* If you want to stop the program */
+        if (command[0] == '0')
+            return 0;
+        arm_printf("at 0x%08x : %d\n", (u32) &value, value);
+    }
+    return 0;
+}

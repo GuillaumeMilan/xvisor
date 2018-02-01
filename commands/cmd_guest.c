@@ -306,7 +306,7 @@ static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
 	vmm_cprintf(cdev,"Failed to find guest\n");
 	return VMM_ENOTAVAIL;
     }
-    vmm_guest_memory_write(guest, gphys_addr, &word, 4, true);
+    vmm_guest_memory_write(guest, gphys_addr, &word, 4, false);
     return VMM_OK;
 
 }
@@ -401,7 +401,7 @@ static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
 	return VMM_EFAIL;
     }
     buf = buf ^ mask;
-    vmm_guest_memory_write(guest, gphys_addr, &buf, 4, true);
+    vmm_guest_memory_write(guest, gphys_addr, &buf, 4, false);
     return VMM_OK;
 }
 
