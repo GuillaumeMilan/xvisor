@@ -23,34 +23,17 @@
 #define SIZE 20
 
 int main(int argc, char** argv) {
-int i=0x444444;
-int j=0x444444;
-int k=0x444444;
-int l=0x444444;
-int m=0x444444;
-int n=0x444444;
-int o=0x444444;
-int p=0x444444;
-int q=0x444444;
-int r=0x444444;
-int s=0x444444;
-return 0;
-/*
-    u32 tabl[SIZE];
-    u32 index;
-    u32* value = (u32*)0x300;
-
-    for(u32 i=0; i<SIZE; i++) {
-	tabl[i]=1;
-    }
-    while(1) {
-	*(value ++);
-	index = 0;
-	tabl[index]++;
-	while(tabl[index]==0 && index<SIZE) {
-	    index ++;
-	    tabl[index]++;
-	}
-    }
-*/
+    __asm__("mov %r9, #4");
+    int i=0x444444;
+    int j=0x444444;
+    int k=0x444444;
+    int l=0x444444;
+    int m=0x444444;
+    int n=0x444444;
+    int o=0x444444;
+    int p=0x444444;
+    int q=0x444444;
+    int r=0x444444;
+    int s=0x444444;
+    return 0;
 }

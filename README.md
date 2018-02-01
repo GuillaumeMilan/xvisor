@@ -64,25 +64,25 @@ It exist a problem installing the software on different system than Debian.
 
 # Install your software for QEMU emulation.
 
-First you need to lauch the QEMU software with the command: 
+The script `create_disk_img.sh` is an example how to create a disk image. 
+
+`make dtbs` create the file `build/arch/arm/board/generic/dts/vexpress/a9/one_guest_vexpress-a9.dtb`
+
+Then you need to lauch the QEMU software with the command: 
     
     qemu-system-arm -M vexpress-a9 -m 512M -display none -serial stdio -kernel build/vmm.bin -dtb build/arch/arm/board/generic/dts/vexpress/a9/one_guest_vexpress-a9.dtb -initrd build/disk.img
 
 This command have launched quemu with and Xvisor running on an ARM emulation. 
 
-Then we have to lauch FreeRTOS. This is done by kicking the guest0 and bind the UART on the guest. 
+Then we have to lauch FreeRTOS or any other software linked in disk.img. This is done by kicking the guest0 and bind the UART on the guest. 
 
     guest kick guest0
     vserial bind guest0/uart
 
-Now FreeRTOS is running on our Xvisor machine. 
+Now the software is running on our Xvisor machine. 
 To return on the Xvisor interface, press `ESC`+`Q`+`X`. 
 
-__TODO explain how to launch a program under FreeRTOS__
-
-This section must be completed. 
-
-# Install your software on the ZYBO. 
+# Install your software on the ZedBoard. 
 
 ### Create a boot for Xvisor on Zynq 
 
@@ -94,27 +94,34 @@ The objective of this section is to give a way to build and boot Xvisor with a
 guest on an ARM cpu. 
 
 #### Tools 
-First we need the following tool:
+First we need the following tools:
 - [U-Boot](https://www.denx.de/wiki/U-Boot): git://git.denx.de/u-boot-imx.git
+
+- [Petalinux SDK](http://www.wiki.xilinx.com/PetaLinux+Getting+Started): petalinux-v2017.1-final-installer.run __Warning__ This file needs at least 21GB of disk space. 
 
 #### Create a bootable SD card
 To create a bootable SD card, it is recommended to follow the step from 
-[Create a Boot Image on a ZYBO](http://www.wiki.xilinx.com/Getting+Started).
+[Create a Boot Image on a ZedBoard](http://www.wiki.xilinx.com/Getting+Started).
 
 You need to part your SD card in 2 part. The first part (`/boot`) will contain:
-- `BOOT.bin`: The file on which the ZYBO will boot. 
+- `BOOT.bin`: The file on which the ZedBoard will boot. 
 - `device_tree.dtb`: at `build/arch/arm/board/generic/dts/vexpress/a9/one_guest_vexpress-a9.dtb`
 The second part will contain the files needed for Xvisor and his guest (`/data`)
 
 __BOOT.bin__
 
+If you already posses a bootable ZedBoard (with a SD card containing at least BOOT.bin), it is suggested to modify the u-boot running. Indeed u-boot is very sensitive to the version of the repository. To be able to launch the new u-boot wihtout recreating the __BOOT.bin__ you can launch the `u-boot.elf` directly from the older `u-boot`. This procedure will be describe in detail in the 5th point. 
+
 1. __Create `u-boot.bin`__. To build `u-boot.bin` you need to clone the 
 repository at the address: `git://git.denx.de/u-boot-imx.git`. Then build your 
-u-boot on the correct architecture. (list available in the folder `configs`). 
+u-boot on the correct architecture. (list available in the folder `configs`).
 
-    make <configs_file>
+Define the `$CROSS_COMPILE` system variable to `<peta_SDK_location>/tools/linux-i386/gcc-arm-none-eabi/bin/arm-none-eabi-`
+
+    make <configs_file> 
     make all
 
+Where `<configs_file>` is `zynq_zed_defconfig` for ZedBoard. 
 2. Build Xvisor for the Zynq. And then remap the files to the correct address.
     ./u-boot/tools/mkimage -A arm64 -O linux -T kernel -C none -a 0x00080000 -e 0x00080000 -n Xvisor -d $xvisor_src/build/vmm.bin $xvisor_src/build/uvmm.bin
     ./u-boot/tools/mkimage -A arm64 -O linux -T ramdisk -a 0x00000000 -n "Xvisor Ramdisk" -d $xvisor_src/build/disk.img $xvisor_src/build/udisk.img
@@ -123,9 +130,36 @@ u-boot on the correct architecture. (list available in the folder `configs`).
 
 
 4. Launch the ZedBoard and map uart0 with the command
-    
+
+First list all the device connected to your computer:
+
+    ls /dev/ > <logfile_1>
+
+Then connect the Uart of your ZedBoard  to your computer USB port
+
+    ls /dev/ > <logfile_2>
+
+Get the ID of your ZedBoard to you computer 
+
+    diff <logfile_1> <logfile_2>
+
+For mine it is `/dev/ttyACM0`. You can now connect to the UART of your ZedBoard by entering the command:
+
     sudo picocom /dev/ttyACM0 -b 115200
 
+A Zynq u-boot terminal is now available. If you want to change the u-boot version with the new elf compiled in the first point, you can do it by loading the file and launching it:
+
+    ext4load mmc 0:2 0x1000 u-boot.elf
+    bootelf 0x1000
+
+__Warning this section haven't been successfully done in this project and may not be correct__. 
+
+On the u-boot Zynq terminal you can now type the command to launch the Xvisor software: 
+
+    setenv bootdelay -1
+    setenv xvisor "mmc dev 0:0; ext4load mmc 0:2 0x200000 uvmm.bin; ext4load mmc 0:2 0x800000 one_guest_virt-v8.dtb; ext4load mmc 0:2 0x2000000 udisk.img; bootm 0x200000 0x2000000 0x800000"
+    saveenv
+    run xvisor
 
 # Launch an injection campaign on your software. 
 

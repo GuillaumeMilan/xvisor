@@ -375,6 +375,7 @@ $(build_dir)/%.dep: $(src_dir)/%.S
 
 $(build_dir)/%.dep: $(src_dir)/%.c
 	$(call compile_cc_dep,$@,$<)
+	echo $(cc)
 
 $(build_dir)/%.o: $(src_dir)/%.S
 	$(call compile_as,$@,$<)
