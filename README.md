@@ -166,8 +166,19 @@ On the u-boot Zynq terminal you can now type the command to launch the Xvisor so
 
 __TODO__ 
 
-This section must be completed. 
+To realize the injeciton campaign we have implemented some command in the file `commands/cmd_guest.c`. To access these commands help you can type:
+    
+    guest help
 
+__guest status__ get the status of the all the processor of the guest.
+
+__guest loadmem__ load a value in the memory of a guest 
+
+__guest inject__ inject a bit flip to a guest memory address according to the shift value. For example if the shift value is 5, the 5th bits of the value in the memory will be flipped. 
+
+__guest reg__ load a value in the register of both processor of the guest.
+
+__guest reginject__ inject a bit flip to a guest register according to the shift value. `shift(5..0)` define the bit flipped during the operation. And `shift(6)` define in which cpu, the register will be modified. 
 # Analyse the result of the injection. 
 
 __TODO__ 

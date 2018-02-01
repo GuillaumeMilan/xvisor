@@ -335,8 +335,9 @@ static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     return VMM_OK;
 }
 
-/** This function realize a bit swap on the register indicated by the
- *    id = shitf/32
+/** This function realize a bit flip on the register indicated by the
+ *     shift 5..0 = bit that will be swap example: shift = 5 -> mask = 0b10000
+ *     shift 6..6 = cpu id (0 or 1)
  **/
 static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     			    physical_addr_t reg, u32 shift)
@@ -355,17 +356,20 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
         if (vcpu->id==cpu_id) {
+            /* get the correct register in the correct cpu */
             value = vcpu->regs.gpr[(u32)reg];
             break;
         }
     }
     vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
-
+    
+    /* inject the error */
     value = value ^ mask;
 
     vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
         if(vcpu->id==cpu_id) {
+            /* update the value of the register */
             cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
             break;
         }
