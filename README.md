@@ -182,7 +182,7 @@ __guest stat\_camp__ this command realize an injection campaign on the guest
 
 - - - - - - - - - - - -
  
-# Forked from Xvisor version 0.2.xx
+# Forked from Xvisor version 0.2.9
 
 http://xvisor.org
 
