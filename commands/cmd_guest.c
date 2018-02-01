@@ -220,9 +220,13 @@ static int cmd_guest_pause(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
+/*
+ * Print the status of a guest.
+ * This includes all registers state and the stack state.
+ */
 static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
 {
-    int i,mod;
+    int i, mod;
     struct vmm_guest *guest = vmm_manager_guest_find(name);
     struct vmm_vcpu *vcpu = NULL;
     irq_flags_t flags;
@@ -231,15 +235,19 @@ static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
         vmm_cprintf(cdev, "Failed to find guest\n");
         return VMM_ENOTAVAIL;
     }
-    vmm_cprintf(cdev, "     ***STATUS OF %s*****\n",name);
+    vmm_cprintf(cdev, "     ***STATUS OF %s*****\n", name);
+    // Lock state of guest in read mode
     vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
 
+    // Print status for each virtual cpu of the guest
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
-        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d,ADDRESS:0x%08x\n",vcpu->id,vcpu->subid,(unsigned int)vcpu);
+        // Print state of special registers and stack
+        vmm_cprintf(cdev, "\t\tVCPU : ID:%d,SUBID:%d,ADDRESS:0x%08x\n", 
+                vcpu->id, vcpu->subid, (unsigned int) vcpu);
         vmm_cprintf(cdev, "STACK: \n");
-        vmm_cprintf(cdev, "    START PC : 0x%08x\n",vcpu->start_pc);
-        vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
-        vmm_cprintf(cdev, "    STACK VA : 0x%08x\n",vcpu->stack_sz);
+        vmm_cprintf(cdev, "    START PC : 0x%08x\n", vcpu->start_pc);
+        vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n", vcpu->stack_va);
+        vmm_cprintf(cdev, "    STACK VA : 0x%08x\n", vcpu->stack_sz);
         vmm_cprintf(cdev, "REGISTER:\n");
         vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n",
                 vcpu->regs.sp_excp);
@@ -248,14 +256,16 @@ static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
         vmm_cprintf(cdev, "    LR : 0x%08x", vcpu->regs.lr);
         vmm_cprintf(cdev, "    PC : 0x%08x\n", vcpu->regs.pc);
         mod = 0;
-        for(i=0;i<CPU_GPR_COUNT;i++) {
+        // Print state of standard registers
+        for (i = 0; i < CPU_GPR_COUNT; i++) {
             mod ++;
-            vmm_cprintf(cdev, "    R%02d=0x%08x",i,vcpu->regs.gpr[i]);
-            if (mod==4||mod==8||mod==12)
-                vmm_cprintf(cdev,"\n");
+            vmm_cprintf(cdev, "    R%02d=0x%08x", i, vcpu->regs.gpr[i]);
+            if (mod == 4 || mod == 8 || mod == 12)
+                vmm_cprintf(cdev, "\n");
         }
-        vmm_cprintf(cdev,"\n");
+        vmm_cprintf(cdev, "\n");
     }
+    // Unlock guest
     vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
     return VMM_OK;
 }
@@ -298,24 +308,32 @@ static int cmd_guest_halt(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
+/*
+ * Load a word into the guest memory
+ */
 static int  cmd_guest_loadmem(struct vmm_chardev *cdev, const char *name,
 			     physical_addr_t gphys_addr, u32 word)
 {
     struct vmm_guest *guest = vmm_manager_guest_find(name);
-    if(!guest) {
-	vmm_cprintf(cdev,"Failed to find guest\n");
-	return VMM_ENOTAVAIL;
+    if (!guest) {
+	    vmm_cprintf(cdev,"Failed to find guest\n");
+	    return VMM_ENOTAVAIL;
     }
     vmm_guest_memory_write(guest, gphys_addr, &word, 4, false);
     return VMM_OK;
 
 }
+
 /** REGISTER NUMBER TABLE:
  *  0 - 12 : R0-R12
  *  13 : SP
  *  14 : LR
  *  15 : PC
  **/
+/*
+ * Write a value into a register, in each virtual cpu of the guest
+ * Why is that so? Because we do not know which vcpu the program will use.
+ */
 static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     			    physical_addr_t reg, u32 value)
 {
@@ -326,11 +344,14 @@ static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     if (!guest) {
         return VMM_ENOTAVAIL;
     }
+    // Lock guest state in write mode
     vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
 
+    // Write register value for each virtual cpu
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
-        cpu_vcpu_reg_write(vcpu,&vcpu->regs,(u32) reg,value);
+        cpu_vcpu_reg_write(vcpu, &vcpu->regs, (u32) reg, value);
     }
+    // Unlock guest state
     vmm_write_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
     return VMM_OK;
 }
@@ -345,14 +366,14 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     struct vmm_guest *guest = vmm_manager_guest_find(name);
     struct vmm_vcpu *vcpu = NULL;
     irq_flags_t flags;
-    u32 mask = 1<<(shift%32);
+    u32 mask = 1 << (shift % 32);
     u32 value = 0;
-    u32 cpu_id = shift/32;
+    u32 cpu_id = shift / 32;
 
     if (!guest) {
         return VMM_ENOTAVAIL;
     }
-
+    // Lock guest state in read mode
     vmm_read_lock_irqsave_lite(&guest->vcpu_lock, flags);
     list_for_each_entry(vcpu, &guest->vcpu_list, head) {
         if (vcpu->id==cpu_id) {
@@ -378,29 +399,35 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     return VMM_OK;
 }
 
+/*
+ * Realize a bit-flip at the address <gphys_addr>, shifted by the value
+ * <shift> to access all bits in the byte
+ */
 static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
     			    physical_addr_t gphys_addr, u32 shift)
 {
     struct vmm_guest *guest = vmm_manager_guest_find(name);
     u32 loaded;
-    u32 buf,mask;
-    if(shift>7) {
-	vmm_cprintf(cdev,"Shift not valid\n");
-	return VMM_EFAIL;
+    u32 buf, mask;
+    if (shift > 7) {
+	vmm_cprintf(cdev, "Shift not valid\n");
+	    return VMM_EFAIL;
     }
 
     mask = 1 << shift;
-    if(!guest) {
-	vmm_cprintf(cdev,"Failed to find guest\n");
-	return VMM_ENOTAVAIL;
+    if (!guest) {
+	    vmm_cprintf(cdev,"Failed to find guest\n");
+	    return VMM_ENOTAVAIL;
     }
-    loaded = vmm_guest_memory_read(guest, gphys_addr,
-					       &buf, 4, FALSE);
+    // Read memory value and store it into buf
+    loaded = vmm_guest_memory_read(guest, gphys_addr, &buf, 4, FALSE);
     if (loaded != 4) {
-	vmm_cprintf(cdev,"Not able to read the memory!\n");
-	return VMM_EFAIL;
+	    vmm_cprintf(cdev,"Not able to read the memory!\n");
+	    return VMM_EFAIL;
     }
+    // Edit the value
     buf = buf ^ mask;
+    // Write the edited value
     vmm_guest_memory_write(guest, gphys_addr, &buf, 4, false);
     return VMM_OK;
 }
@@ -444,16 +471,29 @@ static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 	return VMM_EFAIL;
 }
 
+/*
+ * Inject a fault (bit-flip) at the address <gphys_addr> shifted of <shift>
+ * bits, and at the cycle <cycle>
+ */
 static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
                     physical_addr_t gphys_addr, u32 shift, u64 cycle)
 {
     u64 time = 0;
+
+    // Embedded function that estimates the number of cycles that one
+    // delay loop lasts
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
+
+    // Starts execution of the program
     cmd_guest_kick(cdev, name);
+
+    // Wait the appropriate time
     while (time < cycle) {
         time += estimated_cycle_by_loop;
         arch_delay_loop(1);
     }
+
+    // Pause the guest, inject the fault and resume execution
     cmd_guest_pause(cdev, name);
     vmm_cprintf(cdev, "%s: Injected fault (cycle %llu, address 0x%llx, shift %u)\n", name, time, (u64) gphys_addr, shift);
     cmd_guest_inject(cdev, name, gphys_addr, shift);
@@ -478,10 +518,16 @@ static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name
     return VMM_OK;
 }
 
+/*
+ * ARM Cortex A9 processor does not have a modulo operator
+ */
 static u32 mod(u32 a, u32 b){
 	return (a-(b*do_div(a,b)));
 }
 
+/*
+ * Wait for a given number of cycles
+ */
 static void wait(u64 nb_cycle){
 	u64 cycles = nb_cycle;
     u64 elapsed = 0;
@@ -493,24 +539,40 @@ static void wait(u64 nb_cycle){
     }
 }
 
+/*
+ * Begin an injection campaign of <nb_inject> injections
+ *
+ * <addr_min> and <addr_max> define the memory space where faults
+ * can be injected
+ * <cycle_max> defines the maximum number of cycles that the execution of the
+ * program is supposed to last. 
+ */
 static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
                     u32 addr_min, u32 addr_max, u64 cycle_max, u32 nb_inject)
 {
-    //init random
+    // Init random (mandatory, values are set according to the source)
+    // See random_MT.h for more infos
     unsigned long long init[4]={0x12345ULL, 0x23456ULL, 0x34567ULL, 0x45678ULL}, length=4;
     init_by_array64(init, length); 
 
 	// We do it nb_inject times
 	int i = 0;
 	while (i< nb_inject){
-		u64 rdm = genrand64_int64(); // 32 bits random
+        // 32 bits random
+		u64 rdm = genrand64_int64();
+
 		// random between addr_min et addr_max
-		physical_addr_t gphys_addr_inj = (mod(rdm,addr_max - addr_min)) + addr_min;
-		u32 shift = genrand64_int64() % 8; // the offset is the number of the bit in the byte (so < 8)
+		physical_addr_t gphys_addr_inj = (mod(rdm, addr_max - addr_min)) + addr_min;
+
+        // the offset is the number of the bit in the byte (so < 8)
+		u32 shift = genrand64_int64() % 8; 
 		u64 cycle = genrand64_int64();
-		cycle = mod(cycle, cycle_max); // It is now under cycle_max as requested
+
+        // It is now under cycle_max as requested
+		cycle = mod(cycle, cycle_max); 
 
 		cmd_guest_cycle_inject(cdev, name, gphys_addr_inj, shift, cycle);
+
 		// After the inject only 'cycle' number of cycles have been executed
 		wait(cycle_max - cycle);
 		cmd_guest_reset(cdev, name);
@@ -519,25 +581,41 @@ static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
 	return VMM_OK;
 }
 
+/*
+ * Calculates all the parameters needed to launch an injection campaign
+ * according to this paper provided by our supervisor
+ * https://www.date-conference.com/proceedings-archive/PAPERS/2009/DATE09/PDFFILES/05.5_4.PDF
+ * (Statistical Fault Injection, by R. Leveugle, A. Calvez, P. Maistri and
+ *  P. Vanhauwaert)
+ *
+ *  <err_margin> is the margin of error (<e> in the paper)
+ *  <cut_off_pt> is the cut-off point, or critical value (<t> in the paper)
+ *  !!! Both need to be percents between 0 and 100 !!!
+ */
 static int cmd_guest_stat_camp (struct vmm_chardev *cdev,
                     const char *name, u32 addr_min, u32 addr_max,
                     u64 cycle_max, u32 err_margin, u32 cut_off_pt)
 {
-    /* cut_off_pt, err_margin have been multiplied by 100
-     * err_percent true value is 0.5 (see paper) */
-    u64 pop = (addr_max - addr_min) * cycle_max; // N
-    // FIXME possible overflow with pop
-    u64 nb_faults = 0; // n
-    double square_margin = 0.01 * err_margin; // e
+    // cut_off_pt, err_margin have been multiplied by 100
+    // err_percent true value is 0.5 (see paper)
+    u64 pop = (addr_max - addr_min) * cycle_max; // (N in paper)
+    // Careful: possible overflow with pop
+    
+    u64 nb_faults = 0; // (n in paper)
+
+    double square_margin = 0.01 * err_margin;
     square_margin *= square_margin;
-    double square_cut_off = 0.01 * cut_off_pt; // t
+
+    double square_cut_off = 0.01 * cut_off_pt;
     square_cut_off *= square_cut_off;
 
+    // Just computing the formula step by step
     u32 u_margin = (u32) (square_margin * 100);
     u32 u_cut_off = (u32) (square_cut_off * 100);
     nb_faults = do_div(u_margin * 4 * (pop - 1), u_cut_off);
     nb_faults = do_div(pop, 1 + nb_faults);
 
+    // Launching the campaign
     vmm_printf("%s: Launched injection campaign (pop %llu, nb %llu)\n", name, pop, nb_faults);
     cmd_guest_inject_camp(cdev, name, addr_min, addr_max, cycle_max, nb_faults);
     return VMM_OK;
