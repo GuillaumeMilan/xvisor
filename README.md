@@ -123,6 +123,7 @@ Define the `$CROSS_COMPILE` system variable to `<peta_SDK_location>/tools/linux-
 
 Where `<configs_file>` is `zynq_zed_defconfig` for ZedBoard. 
 2. Build Xvisor for the Zynq. And then remap the files to the correct address.
+
     ./u-boot/tools/mkimage -A arm64 -O linux -T kernel -C none -a 0x00080000 -e 0x00080000 -n Xvisor -d $xvisor_src/build/vmm.bin $xvisor_src/build/uvmm.bin
     ./u-boot/tools/mkimage -A arm64 -O linux -T ramdisk -a 0x00000000 -n "Xvisor Ramdisk" -d $xvisor_src/build/disk.img $xvisor_src/build/udisk.img
 
