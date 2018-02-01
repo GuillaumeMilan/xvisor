@@ -78,7 +78,7 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 	vmm_cprintf(cdev, "   guest inject_camp <guest_name> <gphys_addr_min>"
 			  " <gphys_addr_max> <time_max> <nb>\n");
 	vmm_cprintf(cdev, "   guest stat_camp <guest_name> <gphys_addr_min>"
-			  " <gphys_addr_max> <time_max>\n");
+			  " <gphys_addr_max> <time_max> <margin_err> <cut_off_pt>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
 			  "device tree node\n");
@@ -480,8 +480,8 @@ static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
 {
     u64 time = 0;
 
-    // Embedded function that estimates the number of cycles that one
-    // delay loop lasts
+    // Arch specific function that calculates the number of cycles that
+    // one delay loop lasts
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
 
     // Starts execution of the program
