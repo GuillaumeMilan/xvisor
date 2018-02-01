@@ -43,6 +43,7 @@ libs-objs-y+= common/libfdt.o
 libs-objs-y+= common/bitrev.o
 libs-objs-y+= common/simple_sort.o
 libs-objs-y+= common/memcpy.o
+libs-objs-y+= common/random_MT.o
 
 libs-objs-$(CONFIG_LIBAUTH)+= common/libauth.o
 libs-objs-$(CONFIG_LIBAUTH_DEFAULT_USER)+= common/libauth_passwd.o

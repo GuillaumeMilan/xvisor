@@ -6,12 +6,12 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
  * any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
@@ -30,9 +30,15 @@
 #include <vmm_modules.h>
 #include <vmm_cmdmgr.h>
 #include <vmm_devemu.h>
+#include <vmm_delay.h>
+#include <arch_delay.h>
+#include <arch_cpu.h>
 #include <libs/stringlib.h>
 #include <cpu_defines.h>
 #include <cpu_vcpu_helper.h>
+#include <vmm_timer.h>
+#include <asm/div64.h>
+#include <libs/random_MT.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -60,11 +66,19 @@ static void cmd_guest_usage(struct vmm_chardev *cdev)
 			  "<value>\n");
 	vmm_cprintf(cdev, "   guest inject  <guest_name> <gphys_addr> "
 			  "<shift>\n");
-	vmm_cprintf(cdev, "   guest reginject  <guest_name> <gphys_addr> "
+	vmm_cprintf(cdev, "   guest reginject <guest_name> <gphys_addr> "
 			  "<shift>\n");
 	vmm_cprintf(cdev, "   guest reg     <guest_name> <reg_num> "
 			  "<value>\n");
+	vmm_cprintf(cdev, "   guest cycle_inject <guest_name> "
+			  "<gphys_addr> <shift> <cycle>\n");
+	vmm_cprintf(cdev, "   guest cycle_reginject <guest_name> "
+			  "<gphys_addr> <shift> <cycle>\n");
 	vmm_cprintf(cdev, "   guest region  <guest_name> <gphys_addr>\n");
+	vmm_cprintf(cdev, "   guest inject_camp <guest_name> <gphys_addr_min>"
+			  " <gphys_addr_max> <time_max> <nb>\n");
+	vmm_cprintf(cdev, "   guest stat_camp <guest_name> <gphys_addr_min>"
+			  " <gphys_addr_max> <time_max>\n");
 	vmm_cprintf(cdev, "Note:\n");
 	vmm_cprintf(cdev, "   <guest_name> = node name under /guests "
 			  "device tree node\n");
@@ -206,7 +220,7 @@ static int cmd_guest_pause(struct vmm_chardev *cdev, const char *name)
 	return ret;
 }
 
-static int cmd_guest_status(struct vmm_chardev *cdev, const char *name) 
+static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
 {
     int i,mod;
     struct vmm_guest *guest = vmm_manager_guest_find(name);
@@ -227,7 +241,7 @@ static int cmd_guest_status(struct vmm_chardev *cdev, const char *name)
         vmm_cprintf(cdev, "    STACK SZ : 0x%08x\n",vcpu->stack_va);
         vmm_cprintf(cdev, "    STACK VA : 0x%08x\n",vcpu->stack_sz);
         vmm_cprintf(cdev, "REGISTER:\n");
-        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n", 
+        vmm_cprintf(cdev, "    Exception stack ptr : 0x%08x\n",
                 vcpu->regs.sp_excp);
         vmm_cprintf(cdev, "    CPSR : 0x%08x\n", vcpu->regs.cpsr);
         vmm_cprintf(cdev, "    SP : 0x%08x", vcpu->regs.sp);
@@ -321,7 +335,7 @@ static int cmd_guest_reg(struct vmm_chardev * cdev, const char *name,
     return VMM_OK;
 }
 
-/** This function realize a bit swap on the register indicated by the 
+/** This function realize a bit swap on the register indicated by the
  *    id = shitf/32
  **/
 static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
@@ -331,9 +345,9 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
     struct vmm_vcpu *vcpu = NULL;
     irq_flags_t flags;
     u32 mask = 1<<(shift%32);
-    u32 value;
+    u32 value = 0;
     u32 cpu_id = shift/32;
-    
+
     if (!guest) {
         return VMM_ENOTAVAIL;
     }
@@ -346,7 +360,7 @@ static int cmd_guest_reginject(struct vmm_chardev * cdev, const char *name,
         }
     }
     vmm_read_unlock_irqrestore_lite(&guest->vcpu_lock, flags);
-   
+
     value = value ^ mask;
 
     vmm_write_lock_irqsave_lite(&guest->vcpu_lock, flags);
@@ -389,7 +403,7 @@ static int cmd_guest_inject(struct vmm_chardev * cdev, const char *name,
 
 static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 			     physical_addr_t gphys_addr, u32 len)
-{
+{ //FINDME
 #define BYTES_PER_LINE 16
 	u8 buf[BYTES_PER_LINE];
 	u32 total_loaded = 0, loaded = 0, *mem;
@@ -424,6 +438,105 @@ static int cmd_guest_dumpmem(struct vmm_chardev *cdev, const char *name,
 	}
 
 	return VMM_EFAIL;
+}
+
+static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
+                    physical_addr_t gphys_addr, u32 shift, u64 cycle)
+{
+    u64 time = 0;
+    u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
+    cmd_guest_kick(cdev, name);
+    while (time < cycle) {
+        time += estimated_cycle_by_loop;
+        arch_delay_loop(1);
+    }
+    cmd_guest_pause(cdev, name);
+    vmm_cprintf(cdev, "%s: Injected fault (cycle %llu, address 0x%llx, shift %u)\n", name, time, (u64) gphys_addr, shift);
+    cmd_guest_inject(cdev, name, gphys_addr, shift);
+    cmd_guest_resume(cdev, name);
+    return VMM_OK;
+}
+
+static int cmd_guest_cycle_reginject(struct vmm_chardev * cdev, const char *name,
+                    physical_addr_t gphys_addr, u32 shift, u64 cycle)
+{
+    u64 time = 0;
+    u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
+    cmd_guest_kick(cdev, name);
+    while (time < cycle) {
+        time += estimated_cycle_by_loop;
+        arch_delay_loop(1);
+    }
+    cmd_guest_pause(cdev, name);
+    vmm_cprintf(cdev, "%s: Injected fault (cycle %llu, reg %llu, shift %u)\n", name, time, (u64) gphys_addr, shift);
+    cmd_guest_reginject(cdev, name, gphys_addr, shift);
+    cmd_guest_resume(cdev, name);
+    return VMM_OK;
+}
+
+static u32 mod(u32 a, u32 b){
+	return (a-(b*do_div(a,b)));
+}
+
+static void wait(u64 nb_cycle){
+	u64 cycles = nb_cycle;
+    u64 elapsed = 0;
+    u64 estimated_cycles = arch_delay_loop_cycles(1);
+
+    while (elapsed < cycles) {
+        elapsed += estimated_cycles;
+        arch_delay_loop(1);
+    }
+}
+
+static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
+                    u32 addr_min, u32 addr_max, u64 cycle_max, u32 nb_inject)
+{
+    //init random
+    unsigned long long init[4]={0x12345ULL, 0x23456ULL, 0x34567ULL, 0x45678ULL}, length=4;
+    init_by_array64(init, length); 
+
+	// We do it nb_inject times
+	int i = 0;
+	while (i< nb_inject){
+		u64 rdm = genrand64_int64(); // 32 bits random
+		// random between addr_min et addr_max
+		physical_addr_t gphys_addr_inj = (mod(rdm,addr_max - addr_min)) + addr_min;
+		u32 shift = genrand64_int64() % 8; // the offset is the number of the bit in the byte (so < 8)
+		u64 cycle = genrand64_int64();
+		cycle = mod(cycle, cycle_max); // It is now under cycle_max as requested
+
+		cmd_guest_cycle_inject(cdev, name, gphys_addr_inj, shift, cycle);
+		// After the inject only 'cycle' number of cycles have been executed
+		wait(cycle_max - cycle);
+		cmd_guest_reset(cdev, name);
+		i++;
+	}
+	return VMM_OK;
+}
+
+static int cmd_guest_stat_camp (struct vmm_chardev *cdev,
+                    const char *name, u32 addr_min, u32 addr_max,
+                    u64 cycle_max, u32 err_margin, u32 cut_off_pt)
+{
+    /* cut_off_pt, err_margin have been multiplied by 100
+     * err_percent true value is 0.5 (see paper) */
+    u64 pop = (addr_max - addr_min) * cycle_max; // N
+    // FIXME possible overflow with pop
+    u64 nb_faults = 0; // n
+    double square_margin = 0.01 * err_margin; // e
+    square_margin *= square_margin;
+    double square_cut_off = 0.01 * cut_off_pt; // t
+    square_cut_off *= square_cut_off;
+
+    u32 u_margin = (u32) (square_margin * 100);
+    u32 u_cut_off = (u32) (square_cut_off * 100);
+    nb_faults = do_div(u_margin * 4 * (pop - 1), u_cut_off);
+    nb_faults = do_div(pop, 1 + nb_faults);
+
+    vmm_printf("%s: Launched injection campaign (pop %llu, nb %llu)\n", name, pop, nb_faults);
+    cmd_guest_inject_camp(cdev, name, addr_min, addr_max, cycle_max, nb_faults);
+    return VMM_OK;
 }
 
 static int cmd_guest_region(struct vmm_chardev *cdev, const char *name,
@@ -479,7 +592,7 @@ static int cmd_guest_region(struct vmm_chardev *cdev, const char *name,
 }
 
 static int cmd_guest_param(struct vmm_chardev *cdev, int argc, char **argv,
-			   physical_addr_t *src_addr, u32 *size)
+			   physical_addr_t *src_addr, u32 *size, u32 *time)
 {
 	if (argc < 4) {
 		vmm_cprintf(cdev, "Error: Insufficient argument for "
@@ -493,6 +606,11 @@ static int cmd_guest_param(struct vmm_chardev *cdev, int argc, char **argv,
 	} else {
 		*size = 64;
 	}
+    if (argc > 5) {
+		*time = (physical_size_t)strtoull(argv[5], NULL, 0);
+	} else {
+		*time = 0;
+	}
 	return VMM_OK;
 }
 
@@ -501,6 +619,7 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 	int ret = VMM_OK;
 	u32 size;
 	u32 value;
+    u32 time;
 	physical_addr_t src_addr;
 	if (argc == 2) {
 		if (strcmp(argv[1], "help") == 0) {
@@ -532,37 +651,64 @@ static int cmd_guest_exec(struct vmm_chardev *cdev, int argc, char **argv)
 	} else if (strcmp(argv[1], "halt") == 0) {
 		return cmd_guest_halt(cdev, argv[2]);
 	} else if (strcmp(argv[1], "dumpmem") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_dumpmem(cdev, argv[2], src_addr, size);
 	} else if (strcmp(argv[1], "loadmem") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_loadmem(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "cycle_inject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_cycle_inject(cdev, argv[2], src_addr, value, time);
+	} else if (strcmp(argv[1], "cycle_reginject") == 0) {
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		return cmd_guest_cycle_reginject(cdev, argv[2], src_addr, value, time);
 	} else if (strcmp(argv[1], "inject") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_inject(cdev, argv[2], src_addr, value);
+	} else if (strcmp(argv[1], "inject_camp") == 0){
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		u32 nb_inject = (physical_size_t)strtoull(argv[6], NULL, 0);
+		return cmd_guest_inject_camp(cdev, argv[2], src_addr, value, time, nb_inject);
+	} else if (strcmp(argv[1], "stat_camp") == 0){
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
+		if (VMM_OK != ret) {
+			return ret;
+		}
+		u32 err_margin = (physical_size_t)strtoull(argv[6], NULL, 0);
+		u32 cut_off_pt = (physical_size_t)strtoull(argv[7], NULL, 0);
+		return cmd_guest_stat_camp(cdev, argv[2], src_addr, value, time, err_margin, cut_off_pt);
 	} else if (strcmp(argv[1], "reginject") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_reginject(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "reg") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &value, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
 		return cmd_guest_reg(cdev, argv[2], src_addr, value);
 	} else if (strcmp(argv[1], "region") == 0) {
-		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size);
+		ret = cmd_guest_param(cdev, argc, argv, &src_addr, &size, &time);
 		if (VMM_OK != ret) {
 			return ret;
 		}
