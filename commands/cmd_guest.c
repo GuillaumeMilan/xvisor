@@ -39,6 +39,7 @@
 #include <vmm_timer.h>
 #include <asm/div64.h>
 #include <libs/random_MT.h>
+#include <libs/vserial.h>
 
 #define MODULE_DESC			"Command guest"
 #define MODULE_AUTHOR			"Anup Patel"
@@ -575,6 +576,9 @@ static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
 
 		// After the inject only 'cycle' number of cycles have been executed
 		wait(cycle_max - cycle);
+        cmd_guest_pause(cdev, name);
+        vserial_dump(cdev, "guest0/uart0", 2048);
+        vmm_sdelay(2);
 		cmd_guest_reset(cdev, name);
 		i++;
 	}

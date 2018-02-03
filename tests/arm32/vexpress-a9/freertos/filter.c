@@ -1,3 +1,7 @@
+/*
+ * Adapted from http://lodev.org/cgtutor/filtering.html
+ */
+
 #include <arm_stdio.h>
 
 #include "filter.h"
