@@ -105,10 +105,25 @@ void arm_init(void)
 
 int arm_main(void)
 {
-        arm_puts("Welcome to FreeRTOS!\n");
         //while(1) {
         //apply_filter();
-        arm_puts("Bonjour");
+        unsigned char *array = (unsigned char *) 0x48121212;
+        int i;
+        int j;
+        int len = 10;
+        for (i = 0; i < len; i++) {
+            array[i] = i;
+        }
+        for (j = 0; j < 100000; j++) {
+            for (i = 0; i < len; i++) {
+                array[i] *= 1;
+            }
+        }
+        arm_printf("Result: [");
+        for (i = 0; i < len-1; i++) {
+            arm_printf("%i, ", array[i]);
+        }
+        arm_printf("%i]\n", array[len-1]);
         //}
         /*main_blinky();*/
         /* Don't expect to reach here. */

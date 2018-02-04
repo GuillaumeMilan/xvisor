@@ -486,6 +486,7 @@ static int cmd_guest_cycle_inject(struct vmm_chardev * cdev, const char *name,
     u32 estimated_cycle_by_loop = arch_delay_loop_cycles(1);
 
     // Starts execution of the program
+    cmd_guest_reset(cdev, name);
     cmd_guest_kick(cdev, name);
 
     // Wait the appropriate time
@@ -600,23 +601,19 @@ static int cmd_guest_stat_camp (struct vmm_chardev *cdev,
                     const char *name, u32 addr_min, u32 addr_max,
                     u64 cycle_max, u32 err_margin, u32 cut_off_pt)
 {
-    // cut_off_pt, err_margin have been multiplied by 100
     // err_percent true value is 0.5 (see paper)
     u64 pop = (addr_max - addr_min) * cycle_max; // (N in paper)
     // Careful: possible overflow with pop
     
     u64 nb_faults = 0; // (n in paper)
 
-    double square_margin = 0.01 * err_margin;
-    square_margin *= square_margin;
-
-    double square_cut_off = 0.01 * cut_off_pt;
-    square_cut_off *= square_cut_off;
+    // cut_off_pt, err_margin have been multiplied by 100
+    // calcul is err_margin^2 / cut_off^2 so its ok
+    err_margin *= err_margin;
+    cut_off_pt *= cut_off_pt;
 
     // Just computing the formula step by step
-    u32 u_margin = (u32) (square_margin * 100);
-    u32 u_cut_off = (u32) (square_cut_off * 100);
-    nb_faults = do_div(u_margin * 4 * (pop - 1), u_cut_off);
+    nb_faults = do_div(err_margin * 4 * (pop - 1), cut_off_pt);
     nb_faults = do_div(pop, 1 + nb_faults);
 
     // Launching the campaign
