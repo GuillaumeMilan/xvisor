@@ -554,8 +554,7 @@ static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
 {
     // Init random (mandatory, values are set according to the source)
     // See random_MT.h for more infos
-    unsigned long long init[4]={0x12345ULL, 0x23456ULL, 0x34567ULL, 0x45678ULL}, length=4;
-    init_by_array64(init, length); 
+    init_genrand64(vmm_timer_timestamp()); 
 
 	// We do it nb_inject times
 	int i = 0;
