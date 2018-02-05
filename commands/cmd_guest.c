@@ -575,7 +575,8 @@ static int cmd_guest_inject_camp(struct vmm_chardev * cdev, const char *name,
 		cmd_guest_cycle_inject(cdev, name, gphys_addr_inj, shift, cycle);
 
 		// After the inject only 'cycle' number of cycles have been executed
-		wait(cycle_max - cycle);
+        // We wait 2 times to let the print process before dump
+		wait(2 * cycle_max - cycle);
         cmd_guest_pause(cdev, name);
         vserial_dump(cdev, "guest0/uart0", 2048);
         vmm_sdelay(2);
